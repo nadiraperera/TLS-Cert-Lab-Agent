@@ -1,0 +1,8 @@
+"""Entry point: python main.py  (host/port via HOST/PORT env; default is
+localhost-only because this agent can revoke certificates and has no auth)."""
+import os
+
+import uvicorn
+
+if __name__ == "__main__":
+    uvicorn.run("app:app", host=os.environ.get("HOST", "127.0.0.1"), port=int(os.environ.get("PORT", "8000")))

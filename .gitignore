@@ -1,0 +1,33 @@
+# Environment (host-specific: UID/GID, subnet, root token)
+.env
+
+# Python venv running certbot
+.venv/
+
+# AppRole credentials + rendered DNS credential INI
+.secrets/*
+!.secrets/.gitkeep
+
+# Certbot's own state (config-dir/work-dir/logs-dir)
+certbot/
+
+# Live BIND state: working zone file + .jnl journal (tracked template lives
+# in bind/config/db.lab.test.tmpl instead)
+bind/zones/*
+!bind/zones/.gitkeep
+
+# Generated TSIG key material
+bind/keys/*
+!bind/keys/.gitkeep
+
+# Deployed/placeholder TLS certs (real ones come from Pebble via the deploy hook)
+nginx/certs/*.pem
+
+# Downloaded Pebble test CA (fetched fresh by setup.sh)
+pebble/pebble.minica.pem
+
+# Agent: real API key lives here, never committed
+agent/.env
+agent/.venv/
+agent/__pycache__/
+agent/**/__pycache__/

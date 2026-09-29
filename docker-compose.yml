@@ -1,0 +1,88 @@
+networks:
+  labnet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: ${NETWORK_SUBNET}
+
+services:
+  openbao:
+    image: openbao/openbao:2.7
+    container_name: labwf-openbao
+    command: ["server", "-dev", "-dev-root-token-id=${OPENBAO_ROOT_TOKEN}", "-dev-listen-address=0.0.0.0:8200"]
+    ports:
+      - "8200:8200"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8200/v1/sys/health?standbyok=true"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    networks:
+      labnet:
+        ipv4_address: ${OPENBAO_IP}
+
+  bind9:
+    image: internetsystemsconsortium/bind9:9.18
+    container_name: labwf-bind9
+    # Run as the host user (not the image's default root->bind setuid dance)
+    # so the bind-mounted zones/keys directories, owned by the host user, are
+    # writable/readable without chown or sudo. NET_BIND_SERVICE lets this
+    # non-root process still bind port 53.
+    user: "${HOST_UID}:${HOST_GID}"
+    cap_add:
+      - NET_BIND_SERVICE
+    entrypoint: ["/usr/sbin/named"]
+    command: ["-g", "-c", "/etc/bind/named.conf"]
+    volumes:
+      - ./bind/config/named.conf:/etc/bind/named.conf:ro
+      - ./bind/config/named.conf.options:/etc/bind/named.conf.options:ro
+      - ./bind/config/named.conf.local:/etc/bind/named.conf.local:ro
+      - ./bind/keys:/etc/bind/keys:ro
+      - ./bind/zones:/var/cache/bind
+    ports:
+      - "5353:53/tcp"
+      - "5353:53/udp"
+    healthcheck:
+      test: ["CMD", "dig", "@127.0.0.1", "lab.test", "SOA", "+time=2", "+tries=1"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    networks:
+      labnet:
+        ipv4_address: ${BIND9_IP}
+
+  pebble:
+    image: ghcr.io/letsencrypt/pebble:latest
+    container_name: labwf-pebble
+    command: ["-config", "test/config/pebble-config.json", "-dnsserver", "${BIND9_IP}:53"]
+    environment:
+      PEBBLE_VA_NOSLEEP: "${PEBBLE_VA_NOSLEEP}"
+      PEBBLE_WFE_NONCEREJECT: "${PEBBLE_WFE_NONCEREJECT}"
+    depends_on:
+      bind9:
+        condition: service_healthy
+    ports:
+      - "14000:14000"
+      - "15000:15000"
+    networks:
+      labnet:
+        ipv4_address: ${PEBBLE_IP}
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: labwf-nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      # Mounted as a directory (not individual file mounts) so the deploy
+      # hook's atomic `mv` into this path is visible inside the container.
+      - ./nginx/certs:/etc/nginx/certs
+    ports:
+      - "8443:443"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--no-check-certificate", "--spider", "https://127.0.0.1/"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    networks:
+      labnet:
+        ipv4_address: ${NGINX_IP}

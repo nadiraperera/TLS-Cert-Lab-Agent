@@ -1,0 +1,27 @@
+options {
+    directory "/var/cache/bind";
+
+    // Default session-keyfile path (/run/named/session.key) is root-owned
+    // and unwritable by the non-root HOST_UID this container runs as. This
+    // key is unrelated to our TSIG key (certbot-key) -- it's only used for
+    // ad-hoc local `nsupdate -l` without an explicit key -- but leaving it
+    // at the default produces a permission-denied error on every startup.
+    // Point it at our own writable mount instead.
+    session-keyfile "/var/cache/bind/session.key";
+    // Same story as session-keyfile: default /run/named/named.pid isn't
+    // writable by HOST_UID. We don't need the pid file (docker tracks the
+    // process itself) but pointing it here avoids the startup error.
+    pid-file "/var/cache/bind/named.pid";
+
+    // Authoritative-only lab server: no recursion, no forwarding, answers
+    // anyone (Pebble's DNS-01 validator and our own dig/nsupdate tests).
+    recursion no;
+    allow-query { any; };
+
+    listen-on { any; };
+    listen-on-v6 { none; };
+
+    // The lab zone isn't signed; skip DNSSEC validation of (nonexistent)
+    // upstream chains so named doesn't spam warnings about it.
+    dnssec-validation no;
+};

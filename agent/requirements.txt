@@ -1,0 +1,7 @@
+langchain
+langgraph
+langchain-openai
+python-dotenv
+fastapi
+uvicorn
+amp-instrumentation
